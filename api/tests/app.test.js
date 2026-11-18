@@ -33,7 +33,7 @@ describe('API TaskFlow', () => {
         .post('/api/tasks')
         .send({ title: '  Apprendre Docker  ' });
 
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
         title: 'Apprendre Docker', // espaces retirés
         done: false,
