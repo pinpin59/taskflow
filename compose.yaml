@@ -1,4 +1,11 @@
-# ============================================================================
+ python -m pre_commit install
+python -m pre_commit run --all-files
+pre-commit installed at .git\hooks\pre-commit
+[INFO] Initializing environment for https://github.com/gitleaks/gitleaks.
+Detect hardcoded secrets.................................................Passed
+
+kevin@LAPTOP-TG334CNU MINGW64 ~/taskflow (feature/deploiement)
+$ # ============================================================================
 # compose.yaml : environnement de DÉVELOPPEMENT complet en une commande
 #
 #     docker compose up -d --build     # démarre db + api + front
@@ -61,7 +68,7 @@ services:
       context: ./front
     # "hôte:conteneur" : http://localhost:8080 -> port 80 du conteneur
     ports:
-      - "8080:80"
+      - "3000:80"
     depends_on:
       api:
         condition: service_healthy

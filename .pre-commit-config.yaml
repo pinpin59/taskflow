@@ -1,0 +1,19 @@
+# ============================================================================
+# Hooks pre-commit : exécutés sur VOTRE poste avant chaque commit.
+#   pipx install pre-commit     (ou : pip install --user pre-commit)
+#   pre-commit install          (une fois par clone)
+#   pre-commit run --all-files  (à la demande)
+#
+# gitleaks bloque le commit si un secret (jeton, clé, mot de passe connu...) est
+# dans les fichiers indexés. C'est le filet le plus tôt possible (shift-left) :
+# un secret qui n'est jamais commité n'a pas à être purgé de l'historique.
+# Le hook ne remplace PAS le scan en CI (security.yml, Jour 5) : un hook local
+# se contourne (git commit --no-verify) ou s'oublie.
+#
+# Variante sans Python : hook « gitleaks-docker » (image docker.io/zricethezav/gitleaks).
+# ============================================================================
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks-docker

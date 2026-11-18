@@ -24,3 +24,9 @@ backups/
 *.pem
 *.key
 *.crt
+
+certs/
+backups/
+*.pem
+*.key
+*.crt
