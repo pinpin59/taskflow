@@ -3,6 +3,7 @@
 // repository en mémoire : pas de port réseau, pas de base de données.
 import express from 'express';
 import { createRequestLogger, writeLog } from './logger.js';
+import { createMetrics, defaultMetrics } from './metrics.js';
 
 const MAX_TITLE_LENGTH = 200;
 
@@ -23,7 +24,7 @@ function parseTitle(body) {
   return isValid ? title : null;
 }
 
-function createTaskRoutes(repository) {
+function createTaskRoutes(repository, { tasksCreatedTotal } = {}) {
   const router = express.Router();
 
   router.get(
@@ -42,7 +43,9 @@ function createTaskRoutes(repository) {
           error: `Le titre est obligatoire (1 à ${MAX_TITLE_LENGTH} caractères)`,
         });
       }
-      return res.status(201).json(await repository.create(title));
+      const task = await repository.create(title);
+      tasksCreatedTotal?.inc();
+      return res.status(201).json(task);
     }),
   );
 
@@ -97,14 +100,36 @@ export function createApp({
   appEnv = 'local',
   appVersion = 'dev',
   log = writeLog,
+  metrics = defaultMetrics,
 }) {
+  const { register, httpRequestsTotal, httpRequestDuration, buildInfo } = metrics;
+
+  buildInfo.labels({ version: appVersion }).set(1);
+
   const app = express();
+
+  // Middleware métriques : compteur + histogramme par route normalisée
+  app.use((req, res, next) => {
+    const end = httpRequestDuration.startTimer();
+    res.on('finish', () => {
+      const route = req.route ? `${req.baseUrl}${req.route.path}` : req.path;
+      const labels = { method: req.method, route, status_code: res.statusCode };
+      httpRequestsTotal.inc(labels);
+      end(labels);
+    });
+    next();
+  });
 
   app.use(createRequestLogger(log));
   app.use(express.json());
 
   app.get('/health', createHealthHandler({ repository, appEnv, appVersion }));
-  app.use('/api/tasks', createTaskRoutes(repository));
+  app.use('/api/tasks', createTaskRoutes(repository, metrics));
+
+  app.get('/metrics', async (_req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  });
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Route inconnue' });
