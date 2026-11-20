@@ -24,3 +24,8 @@ backups/
 *.pem
 *.key
 *.crt
+
+# OpenTofu / Terraform : état et cache local (jamais dans Git)
+*.tfstate
+*.tfstate.backup
+.terraform/

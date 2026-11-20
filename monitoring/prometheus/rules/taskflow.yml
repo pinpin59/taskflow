@@ -1,0 +1,23 @@
+groups:
+  - name: taskflow
+    rules:
+      - alert: TaskFlowApiDown
+        expr: probe_success{job="blackbox-health"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TaskFlow staging : /health ne répond plus"
+          description: "La sonde blackbox ne reçoit plus de réponse 2xx depuis 1 minute."
+          runbook_url: "https://github.com/pinpin59/taskflow/blob/main/docs/INCIDENTS.md"
+
+      - alert: TaskFlowHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TaskFlow staging : taux d'erreur 5xx > 5%"
+          description: "{{ $value | humanizePercentage }} des requêtes retournent une erreur serveur."

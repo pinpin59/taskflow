@@ -1,0 +1,21 @@
+rule_files:
+  - ../rules/taskflow.yml
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-health",instance="http://taskflow-staging-front/health"}'
+        values: "1 1 0 0 0"
+
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TaskFlowApiDown
+        exp_alerts: []
+
+      - eval_time: 3m
+        alertname: TaskFlowApiDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "TaskFlow staging : /health ne répond plus"

@@ -1,0 +1,76 @@
+# ============================================================================
+# compose.staging.yaml : l'environnement de « staging » (pré-production).
+#
+# Vit dans STAGING_DIR (défaut : ~/taskflow-staging), à côté de son propre .env.
+# Il fait tourner EXACTEMENT les mêmes images que la prod (même tag), avant elle :
+# c'est là que le smoke test attrape une release cassée avant qu'elle n'atteigne
+# les utilisateurs.
+#
+# Volontairement plus simple que la prod : pas de proxy ni de TLS, le front est
+# publié directement sur http://localhost:8081 (FRONT_PORT). /health passe par le
+# Nginx du front, comme en prod.
+#
+# Les noms (réseau taskflow-staging, volume taskflow-staging-pgdata, conteneurs
+# taskflow-staging-db|api|front) sont FIXÉS : au Jour 4, OpenTofu (infra/) recrée
+# le même environnement avec les mêmes noms.
+#
+#     COMPOSE_FILE=compose.staging.yaml ./deploy.sh <tag>
+# ============================================================================
+
+name: taskflow-staging
+
+services:
+  db:
+    image: docker.io/library/postgres:16-alpine
+    container_name: taskflow-staging-db
+    environment:
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: taskflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow -d taskflow"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER manquant dans .env}/taskflow-api:${IMAGE_TAG:-latest}
+    container_name: taskflow-staging-api
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  front:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER manquant dans .env}/taskflow-front:${IMAGE_TAG:-latest}
+    container_name: taskflow-staging-front
+    ports:
+      - "${FRONT_PORT:-8081}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    name: taskflow-staging-pgdata
+
+networks:
+  default:
+    name: taskflow-staging

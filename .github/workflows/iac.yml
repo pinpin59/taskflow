@@ -1,0 +1,118 @@
+name: IaC
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+
+permissions:
+  contents: read
+  pull-requests: write  # pour publier le plan en commentaire de PR
+
+concurrency:
+  group: iac-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ── Vérification + plan (sur chaque PR qui touche infra/) ───────────────────
+  plan:
+    name: tofu-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.9.0"
+
+      - name: Format check
+        run: tofu fmt -check -recursive
+
+      - name: Init
+        run: tofu init
+
+      - name: Validate
+        run: tofu validate
+
+      - name: Plan
+        id: plan
+        run: |
+          tofu plan -no-color \
+            -var="ghcr_owner=${{ github.repository_owner }}" \
+            -var="image_tag=${{ github.sha }}" \
+            -var="postgres_password=ci-placeholder" \
+            2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Publier le plan dans la PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infra/plan.txt', 'utf8');
+            const body = [
+              '## OpenTofu Plan',
+              '```',
+              plan.slice(0, 65000),
+              '```',
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Échouer si le plan a échoué
+        if: steps.plan.outputs.exitcode != '0'
+        run: exit 1
+
+  # ── Déploiement staging (sur push dans main) ─────────────────────────────────
+  deploy-staging:
+    name: deploy-staging
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.9.0"
+
+      - name: Init (backend dans STAGING_DIR)
+        run: |
+          tofu init \
+            -reconfigure \
+            -backend-config="path=${{ vars.STAGING_DIR || format('{0}/taskflow-staging', env.HOME) }}/terraform.tfstate"
+
+      - name: Apply
+        run: |
+          tofu apply -auto-approve \
+            -var="ghcr_owner=${{ github.repository_owner }}" \
+            -var="image_tag=${{ github.sha }}" \
+            -var="postgres_password=${{ secrets.POSTGRES_PASSWORD }}"
+
+      - name: Smoke test
+        run: bash ../../deploy/smoke-test.sh
+        env:
+          FRONT_PORT: ${{ vars.FRONT_PORT || '8081' }}
