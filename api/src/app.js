@@ -102,7 +102,8 @@ export function createApp({
   log = writeLog,
   metrics = defaultMetrics,
 }) {
-  const { register, httpRequestsTotal, httpRequestDuration, buildInfo } = metrics;
+  const { register, httpRequestsTotal, httpRequestDuration, buildInfo } =
+    metrics;
 
   buildInfo.labels({ version: appVersion }).set(1);
 

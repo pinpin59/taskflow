@@ -35,7 +35,13 @@ export function createMetrics(register = new Registry()) {
     registers: [register],
   });
 
-  return { register, httpRequestsTotal, httpRequestDuration, tasksCreatedTotal, buildInfo };
+  return {
+    register,
+    httpRequestsTotal,
+    httpRequestDuration,
+    tasksCreatedTotal,
+    buildInfo,
+  };
 }
 
 export const defaultMetrics = createMetrics();
