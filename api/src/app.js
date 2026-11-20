@@ -3,7 +3,7 @@
 // repository en mémoire : pas de port réseau, pas de base de données.
 import express from 'express';
 import { createRequestLogger, writeLog } from './logger.js';
-import { createMetrics, defaultMetrics } from './metrics.js';
+import { defaultMetrics } from './metrics.js';
 
 const MAX_TITLE_LENGTH = 200;
 
